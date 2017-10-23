@@ -21,14 +21,18 @@ public class TestExecutor {
         while (true) {
             long start = System.nanoTime();
 
-            CountDownLatch latch = new CountDownLatch(1);
+            final CountDownLatch latch = new CountDownLatch(1);
 
-            final PaddedMutableLong counter = new PaddedMutableLong();
             final PaddedMutableLong total = new PaddedMutableLong();
 
-            for (long l = 0; l < COUNT_EVERY; l++) {
+            for (long l = 1; l <= COUNT_EVERY; l++) {
                 long finalL = l;
-                while (!processor.tryExecute(new AddingRunnable(total, finalL, counter, latch))) {
+                while (!processor.tryExecute(() -> {
+                    total.add(finalL);
+                    if (finalL == COUNT_EVERY) {
+                        latch.countDown();
+                    }
+                })) {
                     LockSupport.parkNanos(1);
                 }
             }
@@ -47,26 +51,5 @@ public class TestExecutor {
 //        System.out.println(Thread.currentThread().getName() + " | " + msg);
     }
 
-    private static class AddingRunnable implements Runnable {
-        private final PaddedMutableLong total;
-        private final long value;
-        private final PaddedMutableLong counter;
-        private final CountDownLatch latch;
-
-        public AddingRunnable(PaddedMutableLong total, long value, PaddedMutableLong counter, CountDownLatch latch) {
-            this.total = total;
-            this.value = value;
-            this.counter = counter;
-            this.latch = latch;
-        }
-
-        @Override
-        public void run() {
-            total.add(value);
-            if (counter.incrementAndGet() == COUNT_EVERY) {
-                latch.countDown();
-            }
-        }
-    }
 }
 
