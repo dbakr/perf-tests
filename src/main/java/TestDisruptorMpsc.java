@@ -3,9 +3,10 @@ import org.agrona.concurrent.HighResolutionTimer;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
+import java.nio.charset.Charset;
 import java.util.concurrent.CountDownLatch;
 
-public class TestDisruptor {
+public class TestDisruptorMpsc {
     public static final BigDecimal NANOS_IN_SECOND = new BigDecimal("1000000000");
     public static final int BATCH_SIZE = 1;
 
@@ -15,7 +16,7 @@ public class TestDisruptor {
         // Specify the size of the ring buffer, must be power of 2.
         int bufferSize = 1024 * 64;
 
-        RingBuffer<LongEvent> ringBuffer = RingBuffer.createSingleProducer(new LongEventEventFactory(), bufferSize,
+        RingBuffer<LongEvent> ringBuffer = RingBuffer.createMultiProducer(new LongEventEventFactory(), bufferSize,
 //                new BusySpinWaitStrategy()
                 new YieldingWaitStrategy()
         );
@@ -70,45 +71,3 @@ public class TestDisruptor {
     }
 }
 
-class LongEvent {
-    private long value;
-
-    public long getValue() {
-        return value;
-    }
-
-    public void setValue(long value) {
-        this.value = value;
-    }
-
-    @Override
-    public String toString() {
-        return "LongEvent{" +
-                "value=" + value +
-                '}';
-    }
-}
-
-class ValueAdditionEventHandler implements EventHandler<LongEvent> {
-    private final PaddedMutableLong value = new PaddedMutableLong();
-    private long count;
-    private CountDownLatch latch;
-
-    public long getValue() {
-        return value.getValue();
-    }
-
-    public void reset(final CountDownLatch latch, final long expectedCount) {
-        value.setValue(0L);
-        this.latch = latch;
-        count = expectedCount;
-    }
-
-    @Override
-    public void onEvent(final LongEvent event, final long sequence, final boolean endOfBatch) throws Exception {
-        value.add(event.getValue());
-        if (count - 1 == (sequence % count)) {
-            latch.countDown();
-        }
-    }
-}
