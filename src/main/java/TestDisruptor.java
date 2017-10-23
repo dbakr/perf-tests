@@ -10,54 +10,16 @@ public class TestDisruptor {
     public static final BigDecimal NANOS_IN_SECOND = new BigDecimal("1000000000");
     public static final int BATCH_SIZE = 1;
     static final Charset CHARSET = Charset.forName("Latin1");
-//    static final ImmutableList<?> TEST_OBJECT = ImmutableList.of(1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12);
 
     public static void main(String[] args) throws InterruptedException {
         HighResolutionTimer.enable();
-//        final FSTConfiguration fst = EventBusMessage.newFstConfiguration();
-        // Executor that will be used to construct new threads for consumers
-//        Executor executor = Executors.newCachedThreadPool();
 
         // Specify the size of the ring buffer, must be power of 2.
         int bufferSize = 1024 * 64;
 
         RingBuffer<LongEvent> ringBuffer = RingBuffer.createSingleProducer(new LongEventEventFactory(), bufferSize,
 //                new BusySpinWaitStrategy()
-                new WaitStrategy() {
-                    private static final int SPIN_TRIES = 100;
-
-                    @Override
-                    public long waitFor(
-                            final long sequence, Sequence cursor, final Sequence dependentSequence, final SequenceBarrier barrier)
-                            throws AlertException, InterruptedException {
-                        long availableSequence;
-                        int counter = SPIN_TRIES;
-
-                        while ((availableSequence = dependentSequence.get()) < sequence) {
-                            counter = applyWaitMethod(barrier, counter);
-                        }
-
-                        return availableSequence;
-                    }
-
-                    @Override
-                    public void signalAllWhenBlocking() {
-                    }
-
-                    private int applyWaitMethod(final SequenceBarrier barrier, int counter)
-                            throws AlertException {
-                        barrier.checkAlert();
-
-                        if (0 == counter) {
-                            Thread.yield();
-//                            Thread.onSpinWait();
-                        } else {
-                            --counter;
-                        }
-
-                        return counter;
-                    }
-                }
+                new YieldingWaitStrategy()
         );
         SequenceBarrier sequenceBarrier = ringBuffer.newBarrier();
         final int countEvery = 100_000_000;
@@ -77,7 +39,6 @@ public class TestDisruptor {
             valueAdditionEventHandler.reset(latch, countEvery);
 
             for (long l = 0; l < countEvery; ) {
-//            bb.putLong(0, l);
 
                 long hi = ringBuffer.next(BATCH_SIZE);
                 for (int i = BATCH_SIZE - 1; i >= 0; i--) {
@@ -85,20 +46,6 @@ public class TestDisruptor {
                     ringBuffer.publish(hi - i);
                     l++;
                 }
-
-            /*if (!ringBuffer.tryPublishEvent((event, sequence) -> {
-                trace("translating " + finalL);
-                event.set(finalL);
-//                event.set(buffer.getLong(0));
-            })) {
-                log("publish failed: " + l);
-            } else {
-                trace("published " + l);
-            }*/
-//            Thread.sleep(1);
-//            ringBuffer.publishEvent((event, sequence, buffer) -> event.set(buffer.getLong(0)), bb);
-//            LockSupport.parkNanos(10);
-//            Thread.sleep(1);
             }
 
             latch.await();
@@ -108,30 +55,6 @@ public class TestDisruptor {
 
         }
     }
-//
-//    private static Object compute(FSTConfiguration fstConfiguration, Long aLong) {
-////        System.out.println("Processing " + aLong + " at " + Thread.currentThread().getName());
-//        //        Thread t = Thread.currentThread();
-//
-////        double pow1 = Math.pow(integer, 0.2);
-////        double pow2 = Math.pow(integer, pow1);
-////        double pow3 = Math.pow(pow2, 0.4);
-////        double pow4 = Math.pow(integer, pow3);
-//
-////        return conf.get().asByteArray(ImmutableList.of(pow1, pow2, pow3, pow4));
-////        FSTConfiguration fstConfiguration = ((ComputationThread)t).fst;
-//
-//
-////        FSTConfiguration fstConfiguration = conf.get();
-//        int[] length = new int[1];
-////        return fstConfiguration.asByteArray(TEST_OBJECT);
-//        return new String(fstConfiguration.asSharedByteArray(TEST_OBJECT, length), 0, length[0], CHARSET);
-//
-////        return new byte[0];
-////        return new String("1");
-//
-////                return fstConfiguration.asByteArray(TEST_OBJECT);
-//    }
 
     private static void log(String msg) {
         System.out.println(Thread.currentThread().getName() + " | " + msg);
